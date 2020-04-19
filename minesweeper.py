@@ -1,5 +1,5 @@
 import pygame, pygame.gfxdraw
-from random import randint
+from random import randint, choice
 from pygame.locals import *
 pygame.init()
 
@@ -27,6 +27,81 @@ except:
     defaultFont = pygame.font.Font(None,30)
     titleFont = pygame.font.Font(None,50)
 
+
+t = pygame.time.Clock()
+
+def ai():
+    global grid, revealed, flags, numFlags, win, lose
+    for y in range(len(grid)):
+        for x in range(len(grid[y])):
+            if revealed[y][x]: # Ensure that AI can only see revealed squares
+                surroundingBombs = 0
+                uncoveredSquares = 0
+                for i in [-1,0,1]:
+                    for j in [-1,0,1]:
+                        if y+i >= 0 and y+i < len(grid) and x+j >= 0 and x+j < len(grid[y]):
+                            if flags[y+i][x+j]:
+                                surroundingBombs += 1
+                            if not revealed[y+i][x+j]:
+                                uncoveredSquares += 1
+                #print surroundingBombs
+                if surroundingBombs == grid[y][x]:
+                    for i in [-1,0,1]:
+                        for j in [-1,0,1]:
+                            if y+i >= 0 and y+i < len(grid) and x+j >= 0 and x+j < len(grid[y]):
+                                if flags[y+i][x+j] == 0 and not revealed[y+i][x+j]:
+                                    revealed[y+i][x+j] = True
+                                    return # Step-by-step
+                                    #t.tick(20)
+                if uncoveredSquares == grid[y][x]:
+                    for i in [-1,0,1]:
+                        for j in [-1,0,1]:
+                            if y+i >= 0 and y+i < len(grid) and x+j >= 0 and x+j < len(grid[y]):
+                                if revealed[y+i][x+j] == False:
+                                    if not flags[y+i][x+j]:
+                                        flags[y+i][x+j] = True
+                                        numFlags+=1
+                                        return
+                                        #t.tick(20)
+    for y in range(len(grid)):
+        for x in range(len(grid[y])):
+            if revealed[y][x] == False and flags[y][x] == False:
+                revealed[y][x] = True
+                return
+
+def dealWithAI():
+    global grid, revealed, flags, numFlags, win, lose
+    hollowZeroes()
+    removeFlags()
+    if(determineLoss()):
+        lose = True
+        drawGrid()
+    if(determineWin()):
+        win = True
+        drawGrid()
+
+def handleMouse(button):
+    global numFlags, lose, win
+    if button==1:
+        x,y = pygame.mouse.get_pos()
+        if revealed[int(round((y-60)/30))][int(round(x/30))] == 0 and flags[int(round((y-60)/30))][int(round(x/30))] == 0:
+            revealed[int(round((y-60)/30))][int(round(x/30))] = 1
+    if button==3:
+        x,y = pygame.mouse.get_pos()
+        if flags[int(round((y-60)/30))][int(round(x/30))] == 0:
+            if(revealed[int(round((y-60)/30))][int(round(x/30))] == 0):
+                flags[int(round((y-60)/30))][int(round(x/30))] = 1
+                numFlags+=1
+        else:
+            flags[int(round((y-60)/30))][int(round(x/30))] = 0
+            numFlags-=1
+    hollowZeroes()
+    removeFlags()
+    if(determineLoss()):
+        lose = True
+    if(determineWin()):
+        win = True
+
 def makeBombs(numBombs):
     global grid, rows, columns
     bombsCreated = 0
@@ -52,49 +127,28 @@ def getNumbers():
 
 def drawGrid():
     global grid
+    screen.fill((0,0,0))
     for y in range(len(grid)):
         for x in range(len(grid[y])):
             if revealed[y][x]:
                 if grid[y][x] == 10:
                     c = (255,50,50)
-                elif grid[y][x] == 0:
-                    c = (255,255,255)
                 else:
-                    c = (255,255,50)
-                text = defaultFont.render(str(grid[y][x]),1,c)
-                screen.blit(text,(x*30+5,y*30+5+60))
+                    c = [(255,255,255),(100,100,255),(100,255,100),(255,255,100),(255,100,100),(255,100,100),(255,100,100),(255,100,100),(255,100,100),(255,100,100)][grid[y][x]]
+                if grid[y][x] != 0:
+                    text = defaultFont.render(str(grid[y][x]),1,c)
+                    screen.blit(text,(x*30+5,y*30+5+60))
             else:
                 pygame.draw.rect(screen,(100,200,100),(x*30,y*30+60,30,30))
                 if flags[y][x]:
                     pygame.draw.rect(screen,(255,50,50),(x*30+5,y*30+5+60,20,20))
+    showStats()
     pygame.display.update()
     for event in pygame.event.get():
         if event.type == QUIT:
             pygame.quit()
         if event.type == MOUSEBUTTONDOWN:
             handleMouse(event.button)
-
-def handleMouse(button):
-    global numFlags, lose, win
-    if button==1:
-        x,y = pygame.mouse.get_pos()
-        if revealed[int(round((y-60)/30))][int(round(x/30))] == 0 and flags[int(round((y-60)/30))][int(round(x/30))] == 0:
-            revealed[int(round((y-60)/30))][int(round(x/30))] = 1
-    if button==3:
-        x,y = pygame.mouse.get_pos()
-        if flags[int(round((y-60)/30))][int(round(x/30))] == 0:
-            if(revealed[int(round((y-60)/30))][int(round(x/30))] == 0):
-                flags[int(round((y-60)/30))][int(round(x/30))] = 1
-                numFlags+=1
-        else:
-            flags[int(round((y-60)/30))][int(round(x/30))] = 0
-            numFlags-=1
-    hollowZeroes()
-    removeFlags()
-    if(determineLoss()):
-        lose = True
-    if(determineWin()):
-        win = True
 
 def hollowZeroes():
     global grid
@@ -110,19 +164,21 @@ def hollowZeroes():
 def removeFlags():
     global flags, revealed, numFlags
     for i in range(len(flags)):
-        for j in range(len(flags)):
+        for j in range(len(flags[i])):
             if flags[i][j] and revealed[i][j]:
                 flags[i][j] = 0
                 numFlags -= 1
 
 def uncoverFirstZero():
     global grid, revealed
+    zeroes = []
     for i in range(len(grid)):
         for j in range(len(grid[i])):
             if grid[i][j] == 0:
-                revealed[i][j] = True
-                hollowZeroes()
-                return
+                zeroes.append([i,j])
+    point = choice(zeroes)
+    revealed[point[0]][point[1]] = True
+    hollowZeroes()
 
 def determineLoss():
     global grid, revealed
@@ -217,21 +273,20 @@ def showStats():
     screen.blit(flagtext,(rows*30-100,10))
 
 def main():
-    global win, lose, screen
+    global win, lose, screen, t
     makeBombs(50)
     getNumbers()
     uncoverFirstZero()
-    t = pygame.time.Clock()
     while True:
         if win:
             signalWin()
         elif lose:
             signalLoss()
         else:
-            screen.fill((0,0,0))
-            showStats()
             drawGrid()
-            t.tick(10)
+            #ai()
+            #dealWithAI()
+            t.tick(20)
 
 if __name__ == '__main__':
     main()
